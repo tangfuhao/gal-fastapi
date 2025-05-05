@@ -158,11 +158,12 @@ class DBRuntimeGame(BaseModel):
         """
         if not (cmd.type == CommandType.BG and game.scene_image_resources):
             return None
-        return next(
-            (item.image_url for item in game.scene_image_resources 
-             if item.scene_name == cmd.name),
-            None
-        )
+            
+        # 遍历资源找到匹配的场景
+        for resource in game.scene_image_resources:
+            if resource.scene_name == cmd.name:
+                return resource.image_url
+        return None
 
     @classmethod
     def _get_dialogue_audio_url(cls, cmd: Command, game: "DBGame") -> Optional[str]:
@@ -177,11 +178,12 @@ class DBRuntimeGame(BaseModel):
         """
         if not (cmd.type == CommandType.DIALOGUE and game.dialogue_tts_resources):
             return None
-        return next(
-            (item.audio_url for item in game.dialogue_tts_resources 
-             if item.character_name == cmd.character),
-            None
-        )
+            
+        # 遍历资源找到匹配的对话
+        for resource in game.dialogue_tts_resources:
+            if resource.text == cmd.text:
+                return resource.audio_url
+        return None
 
     @classmethod
     def _get_bgm_url(cls, cmd: Command, game: "DBGame") -> Optional[str]:
@@ -196,11 +198,12 @@ class DBRuntimeGame(BaseModel):
         """
         if not (cmd.type == CommandType.BGM and game.background_music_resources):
             return None
-        return next(
-            (item.audio_url for item in game.background_music_resources 
-             if item.bgm_name == cmd.name),
-            None
-        )
+            
+        # 遍历资源找到匹配的音乐
+        for resource in game.background_music_resources:
+            if resource.bgm_name == cmd.name:
+                return resource.audio_url
+        return None
 
     @classmethod
     def _get_command_url(cls, cmd: Command, game: "DBGame") -> Optional[str]:
