@@ -109,7 +109,7 @@ class SceneImageWorkflow(Workflow[DBGame]):
                         successful_resources.append(result["data"])
                     else:
                         failed_resources.append(result)
-                        logger.error(f"Failed to generate scene image for chapter {result['chapter_index']}: {result.get('error', 'Unknown error')}")
+                        logger.error(f"Failed to generate scene image for chapter: {result.get('error', 'Unknown error')}")
                 
                 # 更新 scene_image_resources
                 if successful_resources:
@@ -119,7 +119,7 @@ class SceneImageWorkflow(Workflow[DBGame]):
                 if failed_resources:
                     logger.warning(f"Failed to generate {len(failed_resources)} scene images")
                     for failed in failed_resources:
-                        logger.warning(f"Chapter {failed['chapter_index']}: {failed.get('error', 'Unknown error')}")
+                        logger.warning(f"Chapter {failed.get('chapter_index', 'Unknown chapter')}: {failed.get('error', 'Unknown error')}")
 
             # 更新进度
             generate_progress = GameGenerationProgress(
