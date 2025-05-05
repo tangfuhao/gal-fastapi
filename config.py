@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     
     # Frontend settings
     FRONTEND_URL: str
+    BACKEND_URL: str
     
     # MongoDB settings
     MONGODB_URL: str = ""

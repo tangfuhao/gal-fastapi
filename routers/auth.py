@@ -57,7 +57,7 @@ async def google_login(
     """启动 Google OAuth 登录流程"""
     try:
         # 回调到后端接口，并传递编码后的重定向URL
-        callback_uri = f"http://localhost:8000/api/auth/google/callback"
+        callback_uri = f"{settings.BACKEND_URL}/api/auth/google/callback"
         return await oauth.google.authorize_redirect(request, callback_uri)
     except Exception as e:
         raise HTTPException(
