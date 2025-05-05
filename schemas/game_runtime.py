@@ -148,32 +148,3 @@ class GameRuntimeSchema(BaseModel):
             updated_at=db_game.updated_at,
             metadata=db_game.metadata
         )
-
-    @classmethod
-    def from_db_game(cls, game_id: PyObjectId, game_data: dict, user: DBUser) -> "GameRuntimeSchema":
-        """从数据库游戏模型创建运行时响应模型"""
-        return cls(
-            id=str(game_id),
-            title=game_data.get("title", ""),
-            cover_image=game_data.get("cover_image"),
-            description=game_data.get("description", ""),
-            user_id=str(user.id),
-            user_name=user.name,
-            user_avatar=user.avatar_url,
-            version=game_data.get("version", "1.0.0"),
-            total_chapters=len(game_data.get("chapters", [])),
-            tags=set(game_data.get("tags", [])),
-            chapters=[
-                GameChapterSchema(
-                    id=str(i),
-                    index=i,
-                    title=f"第{i+1}章",  # TODO: 从章节数据中获取标题
-                    branches=chapter.get("branches", []),
-                    characters=[
-                        GameCharacterImageSchema(name=r["name"], oss_url=r["oss_url"])
-                        for r in chapter.get("characters", [])
-                    ]
-                )
-                for i, chapter in enumerate(game_data.get("chapters", []))
-            ]
-        )
