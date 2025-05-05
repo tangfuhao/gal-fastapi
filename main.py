@@ -81,18 +81,6 @@ async def health_check():
             detail="Service unavailable"
         )
 
-@app.get("/health")
-async def health_check():
-    """健康检查端点"""
-    try:
-        # 检查数据库连接
-        db = container.database()
-        await db.command("ping")
-        return {"status": "healthy"}
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="Service unhealthy")
-
 @app.get("/")
 async def root():
     """测试端点"""
