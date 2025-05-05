@@ -49,7 +49,7 @@ class DBRuntimeGame(BaseModel):
     version: Optional[str] = Field(default="1.0.0", description="游戏版本")
     total_chapters: int = Field(..., ge=0, description="总章节数")
     chapters: List[DBRuntimeChapter] = Field(default_factory=list, description="章节列表")
-    tags: Set[str] = Field(default_factory=set, description="游戏标签")
+    tags: List[str] = Field(default_factory=list, description="游戏标签")
     play_count: int = Field(default=0, ge=0, description="游戏游玩次数")
     like_count: int = Field(default=0, ge=0, description="游戏点赞数")
     comment_count: int = Field(default=0, ge=0, description="游戏评论数")
@@ -121,11 +121,11 @@ class DBRuntimeGame(BaseModel):
                 name=game.user_info.name,
                 avatar_url=game.user_info.avatar_url
             ),
+            tags=game.story_character_info.tags,
             total_chapters=len(runtime_chapters),
             chapters=runtime_chapters,
             metadata={
                 "original_game_id": str(game.id),
-                "input_text_type": game.input_text_type,
                 "settings": game.settings
             }
         )

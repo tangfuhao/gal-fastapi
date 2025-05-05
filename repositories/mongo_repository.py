@@ -20,7 +20,8 @@ class MongoRepository(BaseRepository[T], Generic[T]):
     async def create(self, model: T) -> Optional[T]:
         """创建新记录"""
         try:
-            result = await self.collection.insert_one(model.model_dump(exclude_none=True, by_alias=True))
+            model_dict = model.model_dump(exclude_none=True, by_alias=True)
+            result = await self.collection.insert_one(model_dict)
             if result.inserted_id:
                 return await self.get(result.inserted_id)
             return None
