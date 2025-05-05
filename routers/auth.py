@@ -115,12 +115,16 @@ async def google_callback(
         redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}")
         
         # 设置 cookie
+        frontend_url = settings.FRONTEND_URL
+        domain = frontend_url.split("://")[1].split(":")[0]  # 提取域名部分
+        is_localhost = domain in ["localhost", "127.0.0.1"]
+        
         redirect.set_cookie(
             key="user_id",
             value=str(user.id),
-            domain=None,  # 让浏览器自动处理
+            domain=None if is_localhost else domain,  # localhost 使用 None，其他情况指定域名
             httponly=True,
-            secure=True,
+            secure=not is_localhost,  # localhost 不使用 secure
             samesite="lax",
             max_age=30 * 24 * 60 * 60  # 30 days
         )
