@@ -119,15 +119,26 @@ async def google_callback(
         domain = frontend_url.split("://")[1].split(":")[0]  # 提取域名部分
         is_localhost = domain in ["localhost", "127.0.0.1"]
         
+        # 打印调试信息
+        print(f"Frontend URL: {frontend_url}")
+        print(f"Extracted domain: {domain}")
+        print(f"Is localhost: {is_localhost}")
+        
+        cookie_domain = None if is_localhost else domain
+        print(f"Setting cookie with domain: {cookie_domain}")
+        
         redirect.set_cookie(
             key="user_id",
             value=str(user.id),
-            domain=None if is_localhost else domain,  # localhost 使用 None，其他情况指定域名
+            domain=cookie_domain,
             httponly=True,
             secure=not is_localhost,  # localhost 不使用 secure
             samesite="lax",
             max_age=30 * 24 * 60 * 60  # 30 days
         )
+        
+        # 打印响应头部信息
+        print(f"Response headers: {dict(redirect.headers)}")
         
         return redirect
         
