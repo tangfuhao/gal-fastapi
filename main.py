@@ -62,23 +62,32 @@ app.include_router(admin_router)
 @app.get("/api/health")
 async def health_check():
     try:
-        # 确保数据库已初始化
+        settings = get_settings()
+        # 检查数据库连接
         db_lifespan = get_database_lifespan()
-        await db_lifespan.init()  # 确保数据库已初始化
+        if not db_lifespan._client:  # 只有在没有连接时才初始化
+            await db_lifespan.init()
         
         # 检查数据库连接
         db = container.database()
         await db.command("ping")
-        settings = get_settings()
+        
         return {
             "status": "healthy",
             "timestamp": datetime.datetime.utcnow(),
             "environment": settings.ENVIRONMENT,
+            "mongodb_url": settings.get_mongodb_url.replace(settings.MONGODB_DB_NAME, "****"),  # 隐藏敏感信息
             "services": {
                 "database": "connected",
                 "api": "running"
             }
         }
+    except ValueError as ve:
+        logger.error(f"Configuration error: {str(ve)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration error: {str(ve)}"
+        )
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(

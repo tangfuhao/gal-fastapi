@@ -30,11 +30,13 @@ class DatabaseLifespan:
         if not self._client:
             try:
                 # 使用环境感知的 MongoDB URL
-                mongodb_url = settings.get_mongodb_url
+                mongodb_url = settings.get_mongodb_url()  
+                logger.info(f"Connecting to MongoDB with URL: {mongodb_url}")  
                 self._client = AsyncIOMotorClient(
                     mongodb_url,
                     maxPoolSize=settings.MONGODB_MAX_POOL_SIZE,
-                    minPoolSize=settings.MONGODB_MIN_POOL_SIZE
+                    minPoolSize=settings.MONGODB_MIN_POOL_SIZE,
+                    serverSelectionTimeoutMS=5000  
                 )
                 self._db = self._client[settings.MONGODB_DB_NAME]
                 
@@ -43,6 +45,8 @@ class DatabaseLifespan:
                 logger.info(f"MongoDB connection established in {settings.ENVIRONMENT} environment")
             except Exception as e:
                 logger.error(f"Failed to connect to MongoDB: {str(e)}")
+                self._client = None  
+                self._db = None
                 raise
         else:
             logger.info("MongoDB connection already established")

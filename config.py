@@ -56,7 +56,12 @@ class Settings(BaseSettings):
         """Get the appropriate MongoDB URL based on environment"""
         if self.ENVIRONMENT == "production":
             # In Railway production, use internal URL if available
-            return self.MONGODB_INTERNAL_URL or self.MONGODB_URL
+            url = self.MONGODB_INTERNAL_URL or self.MONGODB_URL
+            if not url:
+                raise ValueError("No MongoDB URL configured for production environment")
+            return url
+        if not self.MONGODB_URL:
+            raise ValueError("No MongoDB URL configured")
         return self.MONGODB_URL
 
     class Config:
