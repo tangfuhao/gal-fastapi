@@ -92,8 +92,6 @@ log.txt
 data/
 output/
 generated/
-models/
-!models/*.py
 static/generated/
 media/
 uploads/
