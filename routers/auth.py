@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, Request, Header
 from authlib.integrations.starlette_client import OAuth
-from bson import ObjectId
 from schemas.auth import UserResponseSchema, AuthStatusResponseSchema
 from models.user import DBUser
 from models.credits import DBCredits
 from constant.credits import INITIAL_CREDITS
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from repositories.base_repository import BaseRepository
 from core.container import get_user_repository, get_credits_repository
 from config import get_settings
+from utils.jwt import create_access_token
+from typing import Optional
+from core.auth import get_current_user  
 
 settings = get_settings()
 
@@ -26,37 +28,11 @@ oauth.register(
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-@auth_router.get("/me", response_model=AuthStatusResponseSchema)
-async def get_auth_status(
-    request: Request,
-    user_repo: BaseRepository[DBUser] = Depends(get_user_repository)
-):
-    try:
-        # 从请求的 cookies 获取用户ID
-        user_id = request.cookies.get("user_id")
-        if not user_id:
-            return AuthStatusResponseSchema(isLoggedIn=False)
-        
-        users = await user_repo.find_many({"_id": ObjectId(user_id)})
-        if not users:
-            return AuthStatusResponseSchema(isLoggedIn=False)
-        
-        user = users[0]
-        return AuthStatusResponseSchema(
-            isLoggedIn=True,
-            user=UserResponseSchema.from_db_user(user)
-        )
-    except Exception as e:
-        return AuthStatusResponseSchema(isLoggedIn=False)
-
 @auth_router.get("/google")
-async def google_login(
-    request: Request,
-    redirect_to: str = "/"  
-):
+async def google_login(request: Request):
     """启动 Google OAuth 登录流程"""
     try:
-        # 回调到后端接口，并传递编码后的重定向URL
+        # 回调到后端接口
         callback_uri = f"{settings.BACKEND_URL}/api/auth/google/callback"
         return await oauth.google.authorize_redirect(request, callback_uri)
     except Exception as e:
@@ -65,10 +41,21 @@ async def google_login(
             detail=f"Failed to start Google OAuth flow: {str(e)}"
         )
 
+@auth_router.get("/me", response_model=AuthStatusResponseSchema)
+async def get_auth_status(
+    current_user: Optional[DBUser] = Depends(get_current_user)
+):
+    if not current_user:
+        return AuthStatusResponseSchema(isLoggedIn=False)
+    
+    return AuthStatusResponseSchema(
+        isLoggedIn=True,
+        user=UserResponseSchema.from_db_user(current_user)
+    )
+
 @auth_router.get("/google/callback")
 async def google_callback(
     request: Request,
-    response: Response,
     user_repo: BaseRepository[DBUser] = Depends(get_user_repository),
     credits_repo: BaseRepository[DBCredits] = Depends(get_credits_repository)
 ):
@@ -111,36 +98,12 @@ async def google_callback(
                 "avatar": userinfo.get("picture", "")
             })
         
-        # 创建重定向响应
-        redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}")
+        # 创建 JWT token
+        access_token = create_access_token({"sub": str(user.id)})
         
-        # 设置 cookie
-        frontend_url = settings.FRONTEND_URL
-        domain = frontend_url.split("://")[1].split(":")[0]  # 提取域名部分
-        is_localhost = domain in ["localhost", "127.0.0.1"]
-        
-        # 打印调试信息
-        print(f"Frontend URL: {frontend_url}")
-        print(f"Extracted domain: {domain}")
-        print(f"Is localhost: {is_localhost}")
-        
-        cookie_domain = None if is_localhost else domain
-        print(f"Setting cookie with domain: {cookie_domain}")
-        
-        redirect.set_cookie(
-            key="user_id",
-            value=str(user.id),
-            domain=cookie_domain,
-            httponly=True,
-            secure=not is_localhost,  # localhost 不使用 secure
-            samesite="lax",
-            max_age=30 * 24 * 60 * 60  # 30 days
-        )
-        
-        # 打印响应头部信息
-        print(f"Response headers: {dict(redirect.headers)}")
-        
-        return redirect
+        # 创建重定向响应到 Next.js 的回调页面
+        redirect_url = f"{settings.FRONTEND_URL}/auth/callback?token={access_token}"
+        return RedirectResponse(url=redirect_url)
         
     except Exception as e:
         # 重定向到前端错误页面
@@ -149,7 +112,6 @@ async def google_callback(
         )
 
 @auth_router.post("/logout")
-async def logout(response: Response):
-    """用户登出"""
-    response.delete_cookie(key="user_id")
-    return {"status": "success"}
+async def logout():
+    # JWT 不需要服务端登出
+    return JSONResponse({"message": "Logged out successfully"})

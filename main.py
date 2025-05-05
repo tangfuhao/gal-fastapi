@@ -108,4 +108,11 @@ async def background_music_callback(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(
+        "main:app",  # 使用字符串形式的导入路径
+        host="127.0.0.1",
+        port=8000,
+        reload=True,  # 启用热重载
+        reload_dirs=["./"],  # 监视当前目录的变化
+        workers=1  # 使用单个工作进程，便于调试
+    )

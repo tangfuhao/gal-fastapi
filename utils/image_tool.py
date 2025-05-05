@@ -179,13 +179,11 @@ class ImageText2ImageTool:
             }
             body = json.dumps(txt2img_data)
             auth_header = self.generate_signature("POST", url_job, body, app_id, private_key_str)
-            print(f"Auth header: {auth_header}")
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Authorization": auth_header,
             }
-            print(f"Request headers: {headers}")
 
             # 发起任务创建请求
             response = await client.post(

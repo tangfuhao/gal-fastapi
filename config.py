@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Session Configuration
     SECRET_KEY: str  # 用于 cookie 会话加密
     
+    # Server settings
+    WEB_CONCURRENCY: int = 1  # 默认并发数
+    
     # TTS API settings
     TTS_ACCESS_TOKEN: str = ""
     

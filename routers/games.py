@@ -155,6 +155,7 @@ async def generate_game(
 
         return CreateGameResponse(
             task_id=str(game.id),
+            status=CreateGameStatus.SUCCESS
         )
 
     except Exception as e:
@@ -199,6 +200,7 @@ async def generate_next_chapter(
 
         return CreateGameResponse(
             task_id=str(game.id),
+            status=CreateGameStatus.SUCCESS
         )
 
     except Exception as e:

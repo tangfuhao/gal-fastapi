@@ -107,7 +107,7 @@ class SceneImageWorkflow(Workflow[DBGame]):
                         successful_resources.append(result["data"])
                     else:
                         failed_resources.append(result)
-                        logger.error(f"Failed to generate scene image for chapter {result['chapter_index']}: {result.get('error', 'Unknown error')}")
+                        logger.error(f"Failed to generate scene image for chapter: {result.get('error', 'Unknown error')}")
                 
                 # 更新 scene_image_resources
                 if successful_resources:
