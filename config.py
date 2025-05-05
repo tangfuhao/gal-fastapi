@@ -1,8 +1,12 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
+import os
 
 class Settings(BaseSettings):
+    # Environment
+    ENVIRONMENT: str = "development"
+    
     # API Keys
     DEEPSEEK_API_KEY: str
     DEEPSEEK_BASE_URL: str
@@ -16,10 +20,14 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     
     # MongoDB settings
-    MONGODB_URL: str
+    MONGODB_URL: str = ""
+    MONGODB_INTERNAL_URL: str = ""  # Railway internal MongoDB URL
     MONGODB_DB_NAME: str
     MONGODB_MAX_POOL_SIZE: int
     MONGODB_MIN_POOL_SIZE: int
+    
+    # Session Configuration
+    SECRET_KEY: str  # 用于 cookie 会话加密
     
     # TTS API settings
     TTS_ACCESS_TOKEN: str = ""
@@ -30,22 +38,28 @@ class Settings(BaseSettings):
     MUSIC_API_RATE_LIMIT_MAX_REQUESTS: int
     MUSIC_API_RATE_LIMIT_WINDOW: int
     
-    # OSS settings
-    OSS_ACCESS_KEY_ID: str
-    OSS_ACCESS_KEY_SECRET: str
-    OSS_ENDPOINT: str = "https://oss-cn-shanghai.aliyuncs.com"
-    OSS_BUCKET_NAME: str = "midreal-image-sh"
-    
-    # Session settings
-    SECRET_KEY: str
-
-    # Image API settings
+    # Image Generation API
     IMAGE_API_URL: str
     IMAGE_API_APP_ID: str
     IMAGE_API_PRIVATE_KEY: str
     IMAGE_DEFAULT_TIMEOUT: float = 300.0  # 默认的超时时间（秒）
     IMAGE_DEFAULT_POLL_INTERVAL: float = 5.0  # 默认的轮询间隔（秒）
     
+    # Aliyun OSS Configuration
+    OSS_ACCESS_KEY_ID: str
+    OSS_ACCESS_KEY_SECRET: str
+    OSS_ENDPOINT: str = "https://oss-cn-shanghai.aliyuncs.com"
+    OSS_BUCKET_NAME: str = "midreal-image-sh"
+    
+    @property
+    def get_mongodb_url(self) -> str:
+        """根据环境返回适当的 MongoDB URL"""
+        if self.ENVIRONMENT == "production":
+            # 在 Railway 生产环境中使用内部连接
+            return self.MONGODB_INTERNAL_URL or os.getenv("MONGODB_INTERNAL_URL", "") or self.MONGODB_URL
+        # 在开发环境中使用外部连接
+        return self.MONGODB_URL
+
     class Config:
         env_file = ".env"
         case_sensitive = True

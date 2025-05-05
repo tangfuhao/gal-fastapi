@@ -11,6 +11,7 @@ class DatabaseLifespan:
     
     def __init__(self):
         self._client: AsyncIOMotorClient | None = None
+        self._db = None
         
     @property
     def client(self) -> AsyncIOMotorClient:
@@ -18,27 +19,45 @@ class DatabaseLifespan:
             raise RuntimeError("Database client not initialized")
         return self._client
         
+    @property
+    def db(self):
+        if not self._db:
+            raise RuntimeError("Database not initialized")
+        return self._db
+        
     async def init(self):
         """初始化数据库连接"""
         if not self._client:
-            self._client = AsyncIOMotorClient(
-                settings.MONGODB_URL,
-                maxPoolSize=settings.MONGODB_MAX_POOL_SIZE,
-                minPoolSize=settings.MONGODB_MIN_POOL_SIZE
-            )
-            # 测试连接
-            db = self._client[settings.MONGODB_DB_NAME]
-            await db.command("ping")
-            logger.info("MongoDB connection established")
+            try:
+                # 使用环境感知的 MongoDB URL
+                mongodb_url = settings.get_mongodb_url
+                self._client = AsyncIOMotorClient(
+                    mongodb_url,
+                    maxPoolSize=settings.MONGODB_MAX_POOL_SIZE,
+                    minPoolSize=settings.MONGODB_MIN_POOL_SIZE
+                )
+                self._db = self._client[settings.MONGODB_DB_NAME]
+                
+                # 测试连接
+                await self._client.admin.command('ping')
+                logger.info(f"MongoDB connection established in {settings.ENVIRONMENT} environment")
+            except Exception as e:
+                logger.error(f"Failed to connect to MongoDB: {str(e)}")
+                raise
         else:
             logger.info("MongoDB connection already established")
             
     async def close(self):
         """关闭数据库连接"""
         if self._client:
-            self._client.close()
-            self._client = None
-            logger.info("MongoDB connection closed")
+            try:
+                self._client.close()
+                self._client = None
+                self._db = None
+                logger.info("MongoDB connection closed")
+            except Exception as e:
+                logger.error(f"Error closing MongoDB connection: {str(e)}")
+                raise
             
     @asynccontextmanager
     async def lifespan(self, app=None):
