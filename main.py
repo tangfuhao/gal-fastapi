@@ -76,7 +76,7 @@ async def health_check():
             "status": "healthy",
             "timestamp": datetime.datetime.utcnow(),
             "environment": settings.ENVIRONMENT,
-            "mongodb_url": settings.get_mongodb_url.replace(settings.MONGODB_DB_NAME, "****"),  # 隐藏敏感信息
+            "mongodb_url": settings.get_mongodb_url().replace(settings.MONGODB_DB_NAME, "****"),  # 隐藏敏感信息
             "services": {
                 "database": "connected",
                 "api": "running"
