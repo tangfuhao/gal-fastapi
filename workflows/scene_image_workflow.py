@@ -15,7 +15,6 @@ class SceneImageWorkflow(Workflow[DBGame]):
 
     def __init__(self, game_repository: BaseRepository[DBGame]):
         self.game_repository = game_repository
-        self.image_tool = ImageText2ImageTool()
 
     async def execute(self, game: DBGame) -> WorkflowResult[DBGame]:
         """
@@ -47,10 +46,13 @@ class SceneImageWorkflow(Workflow[DBGame]):
                     error="No chapters need to generate scene images"
                 )
 
+            # 获取 ImageTool 实例
+            image_tool = await ImageText2ImageTool.get_instance()
+
             async def generate_scene_image(chapter: GameChapter, background_command: BackgroundCommand):
                 try:
                     # 使用背景命令的 prompt 直接生成图片 宽高比 16:9
-                    result = await self.image_tool.async_text2img(
+                    result = await image_tool.async_text2img(
                         prompt=background_command.prompt,
                         width=1024,
                         height=576,
@@ -107,7 +109,7 @@ class SceneImageWorkflow(Workflow[DBGame]):
                         successful_resources.append(result["data"])
                     else:
                         failed_resources.append(result)
-                        logger.error(f"Failed to generate scene image for chapter: {result.get('error', 'Unknown error')}")
+                        logger.error(f"Failed to generate scene image for chapter {result['chapter_index']}: {result.get('error', 'Unknown error')}")
                 
                 # 更新 scene_image_resources
                 if successful_resources:

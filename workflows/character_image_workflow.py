@@ -61,10 +61,11 @@ class CharacterImageWorkflow(Workflow[DBGame]):
 
             # 只為新角色生成圖像
             if characters_to_generate:
+                # 获取 ImageTool 实例
+                image_tool = await ImageText2ImageTool.get_instance()
+                
                 # 建立圖片生成任務
                 image_tasks = []
-                image_tool = ImageText2ImageTool()
-                
                 for character in characters_to_generate:
                     # 創建圖片生成任務
                     task = image_tool.async_text2img(

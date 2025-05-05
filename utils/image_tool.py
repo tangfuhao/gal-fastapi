@@ -12,7 +12,9 @@ from config import get_settings
 import httpx
 import asyncio
 from utils.ali_upload import upload_from_url
+import logging
 
+logger = logging.getLogger(__name__)
 
 url_pre = "https://cn.tensorart.net"
 app_id = "PUCMSW6Tt"
@@ -55,7 +57,34 @@ class ImageText2ImageTool:
     文生图工具类，基于 TensorArt/TAMS API。
     配置项通过 config.get_settings() 获取。
     """
-
+    
+    _instance = None
+    _lock = asyncio.Lock()
+    
+    def __init__(self):
+        """初始化文生图工具"""
+        self._client = httpx.AsyncClient(timeout=60.0)
+    
+    @classmethod
+    async def get_instance(cls) -> "ImageText2ImageTool":
+        """获取 ImageText2ImageTool 的单例实例"""
+        if not cls._instance:
+            async with cls._lock:
+                if not cls._instance:
+                    cls._instance = cls()
+        return cls._instance
+    
+    async def close(self):
+        """关闭 HTTP 客户端"""
+        await self._client.aclose()
+    
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口"""
+        await self.close()
 
     def generate_signature(self, method, url, body, app_id, private_key_str):
         method_str = method.upper()
