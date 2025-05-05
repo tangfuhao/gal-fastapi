@@ -13,6 +13,9 @@ import httpx
 import asyncio
 from utils.ali_upload import upload_from_url
 import logging
+from datetime import datetime, timedelta
+from collections import deque
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +55,12 @@ I3mJQzPjdIUInPw+Fk7QLUY=
 -----END PRIVATE KEY-----"""
 
 
+@dataclass
+class RateLimitConfig:
+    """速率限制配置"""
+    max_requests: int = 5  # 每个时间窗口内的最大请求数
+    time_window: int = 10  # 时间窗口（秒）
+
 class ImageText2ImageTool:
     """
     文生图工具类，基于 TensorArt/TAMS API。
@@ -64,6 +73,8 @@ class ImageText2ImageTool:
     def __init__(self):
         """初始化文生图工具"""
         self._client = httpx.AsyncClient(timeout=60.0)
+        self.rate_limit = RateLimitConfig()
+        self._request_times = deque(maxlen=self.rate_limit.max_requests)
     
     @classmethod
     async def get_instance(cls) -> "ImageText2ImageTool":
@@ -73,6 +84,26 @@ class ImageText2ImageTool:
                 if not cls._instance:
                     cls._instance = cls()
         return cls._instance
+    
+    async def _check_rate_limit(self) -> None:
+        """检查并等待速率限制"""
+        now = datetime.now()
+        
+        # 清理过期的请求记录
+        while self._request_times and \
+              (now - self._request_times[0]) > timedelta(seconds=self.rate_limit.time_window):
+            self._request_times.popleft()
+        
+        # 如果请求数达到限制，等待到最早的请求过期
+        if len(self._request_times) >= self.rate_limit.max_requests:
+            wait_time = (self._request_times[0] + 
+                        timedelta(seconds=self.rate_limit.time_window) - now).total_seconds()
+            if wait_time > 0:
+                logger.debug(f"Rate limit reached, waiting for {wait_time:.2f} seconds")
+                await asyncio.sleep(wait_time)
+        
+        # 记录新的请求时间
+        self._request_times.append(now)
     
     async def close(self):
         """关闭 HTTP 客户端"""
@@ -101,37 +132,83 @@ class ImageText2ImageTool:
         auth_header = f"TAMS-SHA256-RSA app_id={app_id},nonce_str={nonce_str},timestamp={timestamp},signature={signature_base64}"
         return auth_header
 
-
     async def async_get_job_result(
-        self, job_id: str, poll_interval: float = 1.0, timeout: float = 120.0
+        self, job_id: str, poll_interval: float = 1.0, timeout: float = 120.0,
+        max_retries: int = 3, retry_delay: float = 1.0
     ) -> Dict[str, Any]:
         """
         异步轮询获取任务结果，直到成功或失败或超时。
+        
+        Args:
+            job_id: 任务ID
+            poll_interval: 轮询间隔（秒）
+            timeout: 超时时间（秒）
+            max_retries: 单次请求的最大重试次数
+            retry_delay: 重试间隔（秒）
+            
+        Returns:
+            Dict[str, Any]: 任务结果
+            
+        Raises:
+            TimeoutError: 整体超时
+            Exception: 其他不可恢复的错误
         """
         start_time = time.time()
         async with httpx.AsyncClient() as client:
             while time.time() - start_time < timeout:
                 await asyncio.sleep(poll_interval)
-                headers = {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": self.generate_signature(
-                        "GET", f"{url_job}/{job_id}", "", app_id, private_key_str
-                    ),
-                }
-                response = await client.get(
-                    f"{url_pre}{url_job}/{job_id}", headers=headers
-                )
-                response.raise_for_status()
-                data = response.json()
-                # 打印数据
-                print(data)
-                if "job" in data:
-                    job = data["job"]
-                    status = job.get("status")
-                    if status == "SUCCESS" or status == "FAILED":
-                        return job
-        raise TimeoutError(f"Job {job_id} did not finish in {timeout} seconds.")
+                
+                # 带重试的请求逻辑
+                for retry in range(max_retries):
+                    try:
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": self.generate_signature(
+                                "GET", f"{url_job}/{job_id}", "", app_id, private_key_str
+                            ),
+                        }
+                        response = await client.get(
+                            f"{url_pre}{url_job}/{job_id}",
+                            headers=headers,
+                            timeout=10.0  # 设置单次请求超时
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        
+                        if "job" in data:
+                            job = data["job"]
+                            status = job.get("status")
+                            if status == "SUCCESS" or status == "FAILED":
+                                return job
+                            # 如果状态是进行中，跳出重试循环，继续下一次轮询
+                            break
+                            
+                    except (httpx.ConnectTimeout, httpx.ReadTimeout,
+                            httpx.ConnectError, httpx.NetworkError) as e:
+                        # 网络相关错误，可以重试
+                        if retry < max_retries - 1:
+                            logger.warning(f"Request failed (attempt {retry + 1}/{max_retries}): {str(e)}")
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        # 如果是最后一次重试，记录错误但不抛出异常
+                        logger.error(f"All retries failed for request: {str(e)}")
+                        
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code in {502, 503, 504}:  # 服务器临时错误
+                            if retry < max_retries - 1:
+                                logger.warning(f"Server error (attempt {retry + 1}/{max_retries}): {str(e)}")
+                                await asyncio.sleep(retry_delay)
+                                continue
+                        # 其他 HTTP 错误或最后一次重试失败，记录错误但继续轮询
+                        logger.error(f"HTTP error: {str(e)}")
+                        
+                    except Exception as e:
+                        # 其他意外错误，记录但继续轮询
+                        logger.error(f"Unexpected error while polling: {str(e)}")
+                        
+            # 只有整体超时才抛出异常
+            raise TimeoutError(f"Job {job_id} did not finish in {timeout} seconds.")
 
     async def async_text2img(
         self,
@@ -155,10 +232,6 @@ class ImageText2ImageTool:
                 - sdVae: VAE模型
                 - sampler: 采样器
                 - cfgScale: CFG比例
-                - clipSkip: CLIP跳过层数
-                - embedding: 嵌入
-                - scheduleName: 调度器名称
-                - guidance: 引导比例
                 - poll_interval: 轮询间隔（秒）
                 - timeout: 超时时间（秒）
                 - upload_to_oss: 是否上传到OSS（默认False）
@@ -173,6 +246,9 @@ class ImageText2ImageTool:
             Exception: 其他错误
         """
         settings = get_settings()
+
+        # 检查速率限制
+        await self._check_rate_limit()
 
         # 创建异步HTTP客户端
         async with httpx.AsyncClient() as client:
