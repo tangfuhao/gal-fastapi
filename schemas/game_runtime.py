@@ -5,6 +5,7 @@ from models.user import DBUser
 from models.types import PyObjectId
 from models.db_runtime_game import DBRuntimeGame
 import logging
+from models.db_runtime_game import DBRuntimeBranch
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,9 @@ class GameCommandSchema(BaseModel):
     """游戏命令响应模型"""
     type: str = Field(..., description="命令类型")
     name: Optional[str] = Field(default=None, description="命令名称")
-    text: Optional[str] = Field(default=None, description="命令文本")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="命令元数据")
+    content: Optional[str] = Field(default=None, description="命令文本")
+    is_target_protagonist: Optional[bool] = Field(default=False, description="是否为目标主角")
+    oss_url: Optional[str] = Field(default=None, description="命令关联的资源URL")
 
 class GameBranchSchema(BaseModel):
     """游戏分支响应模型"""
@@ -78,7 +80,7 @@ class GameRuntimeSchema(BaseModel):
             return []
 
     @staticmethod
-    def _convert_game_branch(branch) -> GameBranchSchema:
+    def _convert_game_branch(branch: DBRuntimeBranch) -> GameBranchSchema:
         """转换游戏分支"""
         try:
             return GameBranchSchema(
@@ -87,8 +89,9 @@ class GameRuntimeSchema(BaseModel):
                     GameCommandSchema(
                         type=cmd.type,
                         name=cmd.name,
-                        text=cmd.text,
-                        metadata=cmd.metadata
+                        content=cmd.content,
+                        is_target_protagonist=cmd.is_target_protagonist,
+                        oss_url=cmd.oss_url
                     )
                     for cmd in branch.commands
                 ]
