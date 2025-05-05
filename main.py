@@ -62,13 +62,18 @@ app.include_router(admin_router)
 @app.get("/api/health")
 async def health_check():
     try:
+        # 确保数据库已初始化
+        db_lifespan = get_database_lifespan()
+        await db_lifespan.init()  # 确保数据库已初始化
+        
         # 检查数据库连接
         db = container.database()
         await db.command("ping")
+        settings = get_settings()
         return {
             "status": "healthy",
             "timestamp": datetime.datetime.utcnow(),
-            "environment": os.getenv("RAILWAY_ENVIRONMENT", "development"),
+            "environment": settings.ENVIRONMENT,
             "services": {
                 "database": "connected",
                 "api": "running"
@@ -78,7 +83,7 @@ async def health_check():
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(
             status_code=503,
-            detail="Service unavailable"
+            detail=f"Service unavailable: {str(e)}"
         )
 
 @app.get("/")

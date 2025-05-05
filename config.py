@@ -53,11 +53,10 @@ class Settings(BaseSettings):
     
     @property
     def get_mongodb_url(self) -> str:
-        """根据环境返回适当的 MongoDB URL"""
+        """Get the appropriate MongoDB URL based on environment"""
         if self.ENVIRONMENT == "production":
-            # 在 Railway 生产环境中使用内部连接
-            return self.MONGODB_INTERNAL_URL or os.getenv("MONGODB_INTERNAL_URL", "") or self.MONGODB_URL
-        # 在开发环境中使用外部连接
+            # In Railway production, use internal URL if available
+            return self.MONGODB_INTERNAL_URL or self.MONGODB_URL
         return self.MONGODB_URL
 
     class Config:
