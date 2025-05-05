@@ -224,7 +224,6 @@ async def get_game(
             raise HTTPException(status_code=404, detail="Game not found")
 
         # 转换为响应模型
-        runtime_game = DBRuntimeGame(**runtime_game)
         return GameRuntimeSchema.from_db_runtime_game(runtime_game)
 
     except Exception as e:
@@ -243,7 +242,7 @@ async def list_games(
 ):
     try:
         # 构建查询条件
-        query = {"is_published": True}
+        query = {"is_deleted": False}
         if tag:
             query["tags"] = tag
 

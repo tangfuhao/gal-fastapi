@@ -118,7 +118,7 @@ class MongoRepository(BaseRepository[T], Generic[T]):
             cursor = self.collection.find(filter_dict or {})
             
             if sort:
-                cursor = cursor.sort(list(sort.items()))
+                cursor = cursor.sort(sort)
                 
             cursor = cursor.skip(skip).limit(limit)
             docs = await cursor.to_list(length=None)
