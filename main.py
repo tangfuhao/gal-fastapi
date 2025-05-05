@@ -8,6 +8,8 @@ from routers.user import user_router
 from routers.admin import admin_router
 from config import get_settings
 from core.container import container, get_database_lifespan
+import datetime
+import os
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +57,28 @@ app.include_router(auth_router)
 app.include_router(games_router)
 app.include_router(user_router)
 app.include_router(admin_router)
+
+# 健康检查端点
+@app.get("/api/health")
+async def health_check():
+    try:
+        # 检查数据库连接
+        await container.mongodb().command("ping")
+        return {
+            "status": "healthy",
+            "timestamp": datetime.datetime.utcnow(),
+            "environment": os.getenv("RAILWAY_ENVIRONMENT", "development"),
+            "services": {
+                "database": "connected",
+                "api": "running"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service unavailable"
+        )
 
 @app.get("/health")
 async def health_check():
