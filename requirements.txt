@@ -1,0 +1,19 @@
+authlib==1.5.2  # Google OAuth 认证
+cryptography==41.0.7  # 用于加密相关操作
+dependency_injector==4.46.0  # 依赖注入容器
+email-validator==2.2.0  # 邮件地址验证
+fastapi==0.115.12  # Web 框架
+httpx==0.28.1  # HTTP 客户端，用于异步请求
+itsdangerous==2.1.2  # 用于签名数据
+motor==3.3.2  # MongoDB 异步驱动
+openai==1.75.0  # OpenAI API 客户端
+oss2==2.19.1  # 阿里云 OSS SDK
+pydantic==2.11.3  # 数据验证
+pydantic_settings==2.9.1  # 配置管理
+pymongo==4.6.1  # MongoDB 同步驱动
+python-jose[cryptography]==3.3.0  # JWT token 处理
+python-multipart==0.0.9  # 文件上传支持
+requests==2.32.3  # HTTP 客户端
+starlette==0.46.2  # FastAPI 依赖
+uvicorn==0.34.2  # ASGI 服务器
+python-dotenv==1.0.1  # 环境变量管理

@@ -1,0 +1,242 @@
+import os
+import json
+import time
+import hashlib
+import base64
+import requests
+from typing import Optional, Dict, Any
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import padding
+from config import get_settings
+import httpx
+import asyncio
+from utils.ali_upload import upload_from_url
+
+
+url_pre = "https://cn.tensorart.net"
+app_id = "PUCMSW6Tt"
+url_workflow = "/v1/workflows"
+url_job = "/v1/jobs"
+url_resource = "/v1/resource"
+
+private_key_str = """-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCujbS8Sujiq7WL
+klV696kIUTp/0Af9fklL473C4Hd0eKsLP76BqD8AYy2RBEL8msQT6r/ajVZG3PY4
+zfdUs4sqMxuJz8BcsSpDY81j0cZxHS067o3ZmqHdS7TwZuARQ3yx1lkWLk74ju3p
+LddCLzXb+akZx8ZJN8KcwSJlmC3ST2Vd0zwrt8lwtdeYB7Su5QIyHsAWsv9ZjE+2
+FeYva9yYHhMwLzIp4CUt7yKtaou+VIhRs8DzvmQ+tb4sg6jpTPDN9PZcYfHVgv1M
+kf7DxZctDI1kfBsT6idmBKf6NUorbI3iqaJ6BuU6XX0pU0rvo9PB2G7DTbObJLtB
+CJomWjPnAgMBAAECggEAL6rhBV6LlIMBs9jFYSxKy8uq5wZ/eBlJmODbjGFSHctq
+IktJEg1JDykGY4i/Zk45Z5r+w4c/XWCwGLkeZtIVGfQU/CBwzp9PBFI335+EypUG
+KgbFU/xnYZBwHApr/Crq3YHEmEsTI8ucasYq95b+5VCbfj/RBWOl0LrpUscpFDpI
+zxq0A5Oxv0Bc/C8dePajv65CKk6Bgmi47zGfhG/oU87fpiRFLPglhOMhNZbBlyQy
+SSU/UXccGYx2Tqo8iyxzaB9Y7uDsRAArdlWTi2hE8z4XlDeKBSF2s/jFZBVw4JXy
+Bm6LYGv7LRo8rPsU6n5nugok1R31QCGBOBp8Uk0LMQKBgQDb/77bOZDEIkv7Txph
+aXEgLAyFcuYWzacWI6PaEscEXiCRzBQF74MsqGYjHrIJ8gWiN65C4LxVhUAEECc6
+am4MNVpnM6WuO6G3ZcKc8kfyFIliDh6kVDhCcl8pc6aqX2N7cTilGRcU+T63L6aO
+zx3Ue5QOcclFSPK/Tsw5eHQLzwKBgQDLHiW6U/tufCReL8dwTrSvObHLD1uCIWme
+VMXNQklCT0Ht+Rk5DiiyXBKaIZ/CJ1BSuM2oNC/3K6fSaV3NRL0vK1pN9Tp+1dnJ
+EA/+zkZpaW4PHGroA1/2hnTplFHuvaXoT+7eS+BFTaxbtQwaAsCGukoOic6MpPn2
+42DN1jPkaQKBgAydd6Y+gMyeYtkASjT3xOLhY75rPkJkfIZKeOTSWtMnSprRpvxI
+Ja9z4Jd29SKY3DXXF4kCNgp5X5hcDMPOwoy0qoBsd72r8bQAg85YHkQFZXNX9+3Y
+XnmA8XABD7eJTL0RWvwsmiQ7vprmgpiBy+YZR/4kDDSK4FCUBiXtgEoFAoGBAKD/
+nXIK3XIe7ojFoHURvcBin93Pp34HU/uPQFZJY14vCphBaU/DPFjcCFaprkMr/EwF
+deYMr7Rgox5yLErnYHmCCItghORCR+VKWRNkl4U4b2eE4+xRuH/k5ci7qxHsuxPg
+P/tt8y+buLHcWOJJKifgg5DwhIsQvZ2Hb5TYY7t5AoGAPl783kwRSuMs785OuDSI
+ckV+9WmCJMFDV0M05hOINV9tB7/R7/ZofQ8gq6AYr5Itnd9T9cHPPtvU9A8yDXgX
+wpfRVrix0lZw2S717FtRBUFluAm72hKazrhFWl4/XQ/gH0BJ9rn+Da2k00+noe99
+I3mJQzPjdIUInPw+Fk7QLUY=
+-----END PRIVATE KEY-----"""
+
+
+class ImageText2ImageTool:
+    """
+    文生图工具类，基于 TensorArt/TAMS API。
+    配置项通过 config.get_settings() 获取。
+    """
+
+
+    def generate_signature(self, method, url, body, app_id, private_key_str):
+        method_str = method.upper()
+        url_str = url
+        timestamp = str(int(time.time()))
+        nonce_str = hashlib.md5(timestamp.encode()).hexdigest()
+        body_str = body
+        to_sign = f"{method_str}\n{url_str}\n{timestamp}\n{nonce_str}\n{body_str}"
+        private_key = serialization.load_pem_private_key(
+            private_key_str.encode(), password=None, backend=default_backend()
+        )
+        signature = private_key.sign(to_sign.encode(), padding.PKCS1v15(), hashes.SHA256())
+        signature_base64 = base64.b64encode(signature).decode()
+        auth_header = f"TAMS-SHA256-RSA app_id={app_id},nonce_str={nonce_str},timestamp={timestamp},signature={signature_base64}"
+        return auth_header
+
+
+    async def async_get_job_result(
+        self, job_id: str, poll_interval: float = 1.0, timeout: float = 120.0
+    ) -> Dict[str, Any]:
+        """
+        异步轮询获取任务结果，直到成功或失败或超时。
+        """
+        start_time = time.time()
+        async with httpx.AsyncClient() as client:
+            while time.time() - start_time < timeout:
+                await asyncio.sleep(poll_interval)
+                headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Authorization": self.generate_signature(
+                        "GET", f"{url_job}/{job_id}", "", app_id, private_key_str
+                    ),
+                }
+                response = await client.get(
+                    f"{url_pre}{url_job}/{job_id}", headers=headers
+                )
+                response.raise_for_status()
+                data = response.json()
+                # 打印数据
+                print(data)
+                if "job" in data:
+                    job = data["job"]
+                    status = job.get("status")
+                    if status == "SUCCESS" or status == "FAILED":
+                        return job
+        raise TimeoutError(f"Job {job_id} did not finish in {timeout} seconds.")
+
+    async def async_text2img(
+        self,
+        prompt: str,
+        width: int = 768,
+        height: int = 1280,
+        steps: int = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        异步调用文生图接口，直接返回生成结果。
+
+        Args:
+            prompt (str): 提示词
+            width (int): 图像宽度
+            height (int): 图像高度
+            steps (int): 生成步数
+            **kwargs: 其他参数，包括：
+                - negativePrompts: 负面提示词列表
+                - sdModel: 模型ID
+                - sdVae: VAE模型
+                - sampler: 采样器
+                - cfgScale: CFG比例
+                - clipSkip: CLIP跳过层数
+                - embedding: 嵌入
+                - scheduleName: 调度器名称
+                - guidance: 引导比例
+                - poll_interval: 轮询间隔（秒）
+                - timeout: 超时时间（秒）
+                - upload_to_oss: 是否上传到OSS（默认False）
+                - oss_type: OSS存储类型（如"character", "background"等）
+
+        Returns:
+            Dict[str, Any]: 生成结果，包含图像URL等信息。如果上传到OSS，还会包含OSS URL。
+
+        Raises:
+            httpx.HTTPError: HTTP请求错误
+            TimeoutError: 任务超时
+            Exception: 其他错误
+        """
+        settings = get_settings()
+
+        # 创建异步HTTP客户端
+        async with httpx.AsyncClient() as client:
+            # 准备请求数据
+            request_id = hashlib.md5(f"{int(time.time())}_{prompt}".encode()).hexdigest()
+            print(f"Request ID: {request_id}")
+            txt2img_data = {
+                "request_id": request_id,
+                "stages": [
+                    {
+                        "type": "INPUT_INITIALIZE",
+                        "inputInitialize": {"seed": -1, "count": 1},
+                    },
+                    {
+                        "type": "DIFFUSION",
+                        "diffusion": {
+                            "width": width,
+                            "height": height,
+                            "prompts": [{"text": f"'{prompt}'"}],
+                            "negativePrompts": [{}],
+                            "sdModel": "757279507095956705",
+                            "sdVae": "ae.sft",
+                            "sampler": "euler",
+                            "steps": 25,
+                            "cfgScale": 7,
+                            "clipSkip": 2,
+                            "embedding": {},
+                            "scheduleName": "beta",
+                            "guidance": 3.5,
+                        },
+                    },
+                ],
+            }
+            body = json.dumps(txt2img_data)
+            auth_header = self.generate_signature("POST", url_job, body, app_id, private_key_str)
+            print(f"Auth header: {auth_header}")
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": auth_header,
+            }
+            print(f"Request headers: {headers}")
+
+            # 发起任务创建请求
+            response = await client.post(
+                f"{url_pre}{url_job}", 
+                content=body,
+                headers=headers
+            )
+            print(f"Response status: {response.status_code}")
+            print(f"Response body: {response.text}")
+            response.raise_for_status()
+            result = response.json()
+
+            # 检查任务是否创建成功
+            if "job" not in result or "id" not in result["job"]:
+                raise Exception(f"Failed to create image generation job: {result}")
+
+            # 获取任务结果
+            job_id = result["job"]["id"]
+            get_job_result = await self.async_get_job_result(
+                job_id,
+                poll_interval=kwargs.get(
+                    "poll_interval", settings.IMAGE_DEFAULT_POLL_INTERVAL
+                ),
+                timeout=kwargs.get("timeout", settings.IMAGE_DEFAULT_TIMEOUT),
+            )
+
+            # 如果需要上传到OSS
+            if (
+                kwargs.get("upload_to_oss")
+                and get_job_result["status"] == "SUCCESS"
+            ):
+                image_url = get_job_result["successInfo"]["images"][0]["url"]
+                oss_type = kwargs.get("oss_type", "image")
+                success = await upload_from_url(image_url, oss_type)
+                if success:
+                    # 构建OSS URL
+                    filename = image_url.split("/")[-1].split("?")[0]
+                    oss_path = f"gal-test/{oss_type}/{filename}"
+                    oss_url = f"https://{settings.OSS_BUCKET_NAME}.{settings.OSS_ENDPOINT.replace('https://', '')}/{oss_path}"
+                    # 添加OSS URL到结果中
+                    result["oss_url"] = oss_url
+
+            return result
+
+
+# 用法示例（建议放到 test 或 main 里）
+# from utils.image_tool import ImageText2ImageTool
+# tool = ImageText2ImageTool()
+# resp = tool.text2img(prompt="1girl, amber eyes")
+# job_id = resp.get("job", {}).get("id")
+# if job_id:
+#     import asyncio
+#     result = asyncio.run(tool.async_get_job_result(job_id))
+#     print(result)

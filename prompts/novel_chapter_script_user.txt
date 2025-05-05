@@ -1,0 +1,6 @@
+#小说原文
+{content}
+
+#参考角色名
+{role_names}
+
