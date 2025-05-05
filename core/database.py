@@ -30,7 +30,7 @@ class DatabaseLifespan:
         if not self._client:
             try:
                 # 使用环境感知的 MongoDB URL
-                mongodb_url = settings.get_mongodb_url()  
+                mongodb_url = settings.get_mongodb_url  # 使用 property 而不是调用方法
                 logger.info(f"Connecting to MongoDB with URL: {mongodb_url}")  
                 self._client = AsyncIOMotorClient(
                     mongodb_url,
