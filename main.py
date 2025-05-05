@@ -63,7 +63,8 @@ app.include_router(admin_router)
 async def health_check():
     try:
         # 检查数据库连接
-        await container.mongodb().command("ping")
+        db = container.database()
+        await db.command("ping")
         return {
             "status": "healthy",
             "timestamp": datetime.datetime.utcnow(),
