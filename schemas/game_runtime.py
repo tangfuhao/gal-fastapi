@@ -5,7 +5,7 @@ from models.user import DBUser
 from models.types import PyObjectId
 from models.db_runtime_game import DBRuntimeGame
 import logging
-from models.db_runtime_game import DBRuntimeBranch
+from models.db_runtime_game import DBRuntimeBranch, DBRuntimeChapter, DBRuntimeCharacterImage
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,6 @@ class GameRuntimeSchema(BaseModel):
     published_at: Optional[datetime] = Field(default=None, description="发布时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="游戏元数据")
 
     class Config:
         json_encoders = {
@@ -65,7 +64,7 @@ class GameRuntimeSchema(BaseModel):
         }
 
     @staticmethod
-    def _convert_character_images(characters) -> List[GameCharacterImageSchema]:
+    def _convert_character_images(characters: List[DBRuntimeCharacterImage]) -> List[GameCharacterImageSchema]:
         """转换角色立绘列表"""
         try:
             return [
@@ -101,10 +100,10 @@ class GameRuntimeSchema(BaseModel):
             return GameBranchSchema(name="error", commands=[])
 
     @staticmethod
-    def _convert_game_chapter(chapter) -> GameChapterSchema:
+    def _convert_game_chapter(chapter: DBRuntimeChapter) -> GameChapterSchema:
         """转换游戏章节"""
         try:
-            return GameChapterSchema(
+            result = GameChapterSchema(
                 id=chapter.id,
                 index=chapter.index,
                 title=chapter.title,
@@ -114,6 +113,7 @@ class GameRuntimeSchema(BaseModel):
                 ],
                 characters=GameRuntimeSchema._convert_character_images(chapter.characters)
             )
+            return result
         except Exception as e:
             logger.error(f"Failed to convert game chapter: {str(e)}")
             return GameChapterSchema(
@@ -149,5 +149,4 @@ class GameRuntimeSchema(BaseModel):
             published_at=db_game.published_at,
             created_at=db_game.created_at,
             updated_at=db_game.updated_at,
-            metadata=db_game.metadata
         )

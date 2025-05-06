@@ -1,29 +1,17 @@
 from datetime import datetime
-from typing import List, Optional, Set, Dict, Any, Iterator
+from typing import List, Optional
 from pydantic import BaseModel, Field
-from starlette.responses import Content
 from models.types import PyObjectId
-from models.game import DBGame
-from utils.script_coder import parse_script
-from dataclasses import asdict
-from bson import ObjectId
+from models.game import DBGame, Character, CharacterResource
 from schemas.script_commands import (
     CommandType,
     BaseCommand,
-    NarrationCommand,
-    DialogueCommand,
-    ChoiceCommand,
-    JumpCommand,
-    BackgroundCommand,
-    BGMCommand,
-    Branch,
-    Command,
-    ScriptValidationError,
-    BranchError,
-    CommandError,
-    StructureError
+    Command
 )
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DBGameCommand(BaseModel):
     """数据库中的游戏命令"""
@@ -77,12 +65,11 @@ class DBRuntimeGame(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
     deleted_at: Optional[datetime] = Field(default=None, description="删除时间")
     is_deleted: bool = Field(default=False, description="是否已删除")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="游戏元数据")
 
     class Config:
         arbitrary_types_allowed = True
         json_encoders = {
-            ObjectId: str,
+            PyObjectId: str,
             datetime: lambda dt: dt.isoformat()
         }
         populate_by_name = True
@@ -283,6 +270,31 @@ class DBRuntimeGame(BaseModel):
         return result
 
     @classmethod
+    def _convert_character_images(cls, characters: List[Character], character_resources: List[CharacterResource]) -> List[DBRuntimeCharacterImage]:
+        """转换角色立绘列表"""
+        try:
+            result = []
+            for char in characters:
+                # 遍历 character_resources 找到匹配的角色
+                matching_resource: Optional[CharacterResource] = None
+                for resource in character_resources:
+                    if resource.character_name == char.name:
+                        matching_resource = resource
+                        break
+                
+                if matching_resource:
+                    result.append(
+                        DBRuntimeCharacterImage(
+                            name=char.name,
+                            oss_url=matching_resource.image_url
+                        )
+                    )
+            return result
+        except Exception as e:
+            logger.error(f"转换角色立绘列表失败: {str(e)}")
+            return []
+
+    @classmethod
     def convert_to_runtime_game(cls, game: "DBGame") -> "DBRuntimeGame":
         """转换游戏对象为运行时游戏对象
 
@@ -320,12 +332,12 @@ class DBRuntimeGame(BaseModel):
                 index=chapter.index,
                 title=chapter.title or f"第{chapter.index + 1}章",
                 branches=runtime_branches,
-                characters=[]  # 角色立绘会在后续处理中添加
+                characters=cls._convert_character_images(game.story_character_info.characters, game.character_resources)
             )
             runtime_chapters.append(runtime_chapter)
         
         # 创建运行时游戏
-        runtime_game = cls(
+        runtime_game: DBRuntimeGame = cls(
             id=game.id,
             title=game.title,
             user_id=game.user_id,
@@ -336,10 +348,6 @@ class DBRuntimeGame(BaseModel):
             tags=game.story_character_info.tags,
             total_chapters=len(runtime_chapters),
             chapters=runtime_chapters,
-            metadata={
-                "original_game_id": str(game.id),
-                "settings": game.settings
-            }
         )
         
         return runtime_game

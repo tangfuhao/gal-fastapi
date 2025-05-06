@@ -224,7 +224,8 @@ async def get_game(
             raise HTTPException(status_code=404, detail="Game not found")
 
         # 转换为响应模型
-        return GameRuntimeSchema.from_db_runtime_game(runtime_game)
+        result = GameRuntimeSchema.from_db_runtime_game(runtime_game)
+        return result
 
     except Exception as e:
         logger.error(f"Failed to get game: {str(e)}")
