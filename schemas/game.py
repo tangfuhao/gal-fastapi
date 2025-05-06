@@ -11,6 +11,8 @@ class GameListItemSchema(BaseModel):
     cover_image: Optional[str] = None
     status: str = Field(description="游戏状态: generating, published, failed")
     progress: float = Field(description="生成进度, 0-100", ge=0, le=100)
+    current_chapter: int = Field(description="当前章节数")
+    chapter_count: int = Field(description="章节数量")
     created_at: datetime
 
     @classmethod
@@ -32,5 +34,7 @@ class GameListItemSchema(BaseModel):
             cover_image=game.settings.get("cover_image"),
             status=status_map[game.status],
             progress=progress,
+            current_chapter=game.generate_chapter_index,
+            chapter_count=game.total_chapters,
             created_at=game.created_at,
         )
