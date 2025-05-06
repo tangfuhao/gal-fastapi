@@ -35,6 +35,6 @@ class GameListItemSchema(BaseModel):
             status=status_map[game.status],
             progress=progress,
             current_chapter=game.generate_chapter_index,
-            chapter_count=game.total_chapters,
+            chapter_count=len(game.chapters),
             created_at=game.created_at,
         )
