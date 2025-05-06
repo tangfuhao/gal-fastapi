@@ -58,7 +58,7 @@ class GameGenerationWorkflow:
                 workflow = workflow_type(self.game_repository)
                 logger.info(f"开始执行工作流: {workflow_name}")
                 result = await workflow.execute(game)
-                logger.info(f"工作流 {workflow_name} 执行结果: {result}")
+                logger.info(f"工作流 {workflow_name} 执行完成")
 
                 if not result.success:
                     # 更新失败状态和错误信息
