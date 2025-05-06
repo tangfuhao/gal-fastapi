@@ -164,7 +164,7 @@ async def generate_game(
         )
 
 
-@games_router.post("/{game_id}/next", response_model=CreateGameResponse)
+@games_router.post("/{game_id}/next_chapter", response_model=CreateGameResponse)
 async def generate_next_chapter(
     game_id: str,
     current_user: DBUser = Depends(get_current_user),
