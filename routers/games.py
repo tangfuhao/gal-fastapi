@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
-from bson import ObjectId
 from enum import Enum
 import asyncio
 import logging
@@ -12,11 +11,12 @@ from models.user import DBUser
 from models.db_runtime_game import DBRuntimeGame
 from workflows.game_generation import GameGenerationWorkflow
 from core.auth import get_current_user
-from core.container import get_game_repository, get_runtime_game_repository
+from core.container import get_game_repository, get_runtime_game_repository, get_credits_repository
 from schemas.game_runtime import GameRuntimeSchema
 from schemas.game_list import GameListItemSchema
 from utils.text import TextUtils
 from utils.llm_tool import LLMTool
+from repositories.credits_repository import CreditsRepository
 from repositories.base_repository import BaseRepository
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ class CreateGameResponse(BaseModel):
     """创建游戏响应模型"""
     task_id: Optional[str]
     status: CreateGameStatus
+    error: Optional[str] = None
 
 
 # 创建路由
@@ -48,12 +49,23 @@ async def create_game(
     request: CreateGameRequest,
     current_user: DBUser = Depends(get_current_user),
     game_repo: BaseRepository[DBGame] = Depends(get_game_repository),
-    runtime_game_repo: BaseRepository[DBRuntimeGame] = Depends(get_runtime_game_repository)
+    runtime_game_repo: BaseRepository[DBRuntimeGame] = Depends(get_runtime_game_repository),
+    credits_repo: CreditsRepository = Depends(get_credits_repository)
 ):
     """创建新游戏"""
     try:
+        # 检查用户是否有足够的credits
+        user_credits = await credits_repo.get_by_user_id(current_user.id)
+        if not user_credits or user_credits.amount <= 0:
+            return CreateGameResponse(
+                task_id=None,
+                status=CreateGameStatus.FAILED,
+                error="您的游戏生成次数已用完"
+            )
+
         # 截取一定长度的文本
-        text_to_analyze = TextUtils.truncate_by_complete_lines(request.novel_text, 5000)      
+        text_to_analyze = TextUtils.truncate_by_complete_lines(request.novel_text, 5000)
+        
 
         # 先调用大模型检查内容类型
         llm_tool = LLMTool()
@@ -77,10 +89,20 @@ async def create_game(
         if input_type is None:
             return CreateGameResponse(
                 task_id=None,
-                status=CreateGameStatus.FAILED
+                status=CreateGameStatus.FAILED,
+                error="无效的内容类型"
+            )
+
+        # 扣除用户credits
+        if not await credits_repo.deduct_credits(current_user.id):
+            return CreateGameResponse(
+                task_id=None,
+                status=CreateGameStatus.FAILED,
+                error="扣除游戏生成次数失败"
             )
 
         # 创建游戏记录
+        text_to_generate = TextUtils.truncate_by_complete_lines(request.novel_text, 10000)
         game = DBGame(
             user_id=current_user.id,
             user_info=UserInfo(
@@ -90,7 +112,7 @@ async def create_game(
             title=request.title,
             input_text_type=input_type,
             input_text=request.novel_text,
-            novel_text=text_to_analyze,
+            novel_text=text_to_generate,
             settings=request.settings,
             progress=GameGenerationProgress(current_workflow="", progress=0),
             status=GameStatus.GENERATING,
@@ -113,7 +135,9 @@ async def create_game(
     except Exception as e:
         logger.error(f"Failed to create game: {str(e)}")
         return CreateGameResponse(
-            status=CreateGameStatus.FAILED
+            task_id=None,
+            status=CreateGameStatus.FAILED,
+            error="创建游戏失败"
         )
 
 
@@ -168,9 +192,13 @@ async def generate_game(
 async def generate_next_chapter(
     game_id: str,
     current_user: DBUser = Depends(get_current_user),
-    game_repo: BaseRepository[DBGame] = Depends(get_game_repository)
+    game_repo: BaseRepository[DBGame] = Depends(get_game_repository),
+    runtime_game_repo: BaseRepository[DBRuntimeGame] = Depends(get_runtime_game_repository),
+    credits_repo: CreditsRepository = Depends(get_credits_repository)
 ):
     try:
+
+
         # 查找游戏记录
         game = await game_repo.get(game_id)
         if not game:
@@ -185,6 +213,22 @@ async def generate_next_chapter(
             raise HTTPException(
                 status_code=403, detail="Not authorized to generate next chapter"
             )
+        # 检查用户是否有足够的credits
+        user_credits = await credits_repo.get_by_user_id(current_user.id)
+        if not user_credits or user_credits.amount <= 0:
+            return CreateGameResponse(
+                task_id=None,
+                status=CreateGameStatus.FAILED,
+                error="您的游戏生成次数已用完"
+            )
+
+        # 扣除用户credits
+        if not await credits_repo.deduct_credits(current_user.id, reason="生成游戏下一章节"):
+            return CreateGameResponse(
+                task_id=None,
+                status=CreateGameStatus.FAILED,
+                error="扣除游戏生成次数失败"
+            )
 
         # 增加 generate_chapter_index
         game.generate_chapter_index += 1
@@ -195,7 +239,7 @@ async def generate_next_chapter(
         )
         
         # 启动游戏生成工作流
-        workflow = GameGenerationWorkflow(game_repo)
+        workflow = GameGenerationWorkflow(game_repo, runtime_game_repo)
         asyncio.create_task(workflow.generate_game(game))
 
         return CreateGameResponse(
@@ -204,8 +248,11 @@ async def generate_next_chapter(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to generate next chapter: {str(e)}"
+        logger.error(f"Failed to generate next chapter: {str(e)}")
+        return CreateGameResponse(
+            task_id=None,
+            status=CreateGameStatus.FAILED,
+            error="生成下一章节失败"
         )
 
 

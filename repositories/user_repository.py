@@ -101,6 +101,29 @@ class UserRepository(BaseRepository[DBUser]):
             logger.error(f"Failed to update user last login: {str(e)}")
             return False
 
+    async def deduct_credits(self, id: str, amount: int = 1) -> bool:
+        """扣除用户的游戏生成次数
+        
+        Args:
+            id: 用户ID
+            amount: 扣除的数量，默认为1
+            
+        Returns:
+            bool: 是否扣除成功
+        """
+        try:
+            result = await self.collection.update_one(
+                {
+                    "_id": id,
+                    "credits": {"$gte": amount}  # 确保有足够的credits
+                },
+                {"$inc": {"credits": -amount}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Failed to deduct user credits: {str(e)}")
+            return False
+
 
 class MockUserRepository(BaseMockRepository[DBUser]):
     """用于测试的用户数据仓库实现"""

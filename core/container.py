@@ -9,6 +9,8 @@ from models.credits import DBCredits
 from models.credits_history import DBCreditsHistory
 from config import get_settings
 from core.database import db_lifespan
+from repositories.credits_repository import CreditsRepository
+from functools import lru_cache
 
 settings = get_settings()
 
@@ -79,9 +81,9 @@ class Container(containers.DeclarativeContainer):
     )
 
     credits_repository = providers.Singleton(
-        MongoRepository[DBCredits],
+        CreditsRepository,
         collection=credits_collection,
-        model_class=DBCredits
+        history_collection=credits_history_collection
     )
 
     credits_history_repository = providers.Singleton(
@@ -107,11 +109,12 @@ def get_runtime_game_repository() -> BaseRepository[DBRuntimeGame]:
 def get_user_repository() -> BaseRepository[DBUser]:
     return container.user_repository()
 
-def get_credits_repository() -> BaseRepository[DBCredits]:
+def get_credits_repository() -> CreditsRepository:
     return container.credits_repository()
 
 def get_credits_history_repository() -> BaseRepository[DBCreditsHistory]:
     return container.credits_history_repository()
+
 
 # 获取数据库生命周期管理器
 def get_database_lifespan():
