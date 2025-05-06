@@ -104,9 +104,9 @@ class ChapterSplitWorkflow(Workflow[DBGame]):
             update_success = await self.game_repository.update(
                 id=game.id,
                 fields={
-                    "chapters": chapters,
-                    "total_chapters": len(chapters),
-                    "progress": generate_progress
+                    "chapters": game.chapters,
+                    "total_chapters": game.total_chapters,
+                    "progress": game.progress 
                 }
             )
 

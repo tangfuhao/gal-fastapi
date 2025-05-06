@@ -46,42 +46,42 @@ class StoryCharacterInfoWorkflow(Workflow[DBGame]):
                 story_character_info = StoryCharacterInfo.model_validate(
                     json.loads(json_str)
                 )
+
+                # 更新进度
+                generate_progress = GameGenerationProgress(
+                    current_workflow="story_character_info",
+                    progress=10
+                )
+
+                # 使用数据仓库更新数据库
+                update_success = await self.game_repository.update(
+                    id=game.id,
+                    fields={
+                        "story_character_info": story_character_info,
+                        "progress": generate_progress
+                    }
+                )
+
+                if not update_success:
+                    return WorkflowResult(
+                        success=False,
+                        error="Failed to update game data"
+                    )
+
+                # 更新game对象
+                game.story_character_info = story_character_info
+                game.progress = generate_progress
+
+                return WorkflowResult(
+                    success=True,
+                    data=game
+                )
             except (json.JSONDecodeError, ValidationError) as e:
                 return WorkflowResult(
                     success=False,
                     error="Failed to parse character info",
                     error_details={"raw_content": completion, "error": str(e)}
                 )
-
-            # 更新进度
-            generate_progress = GameGenerationProgress(
-                current_workflow="story_character_info",
-                progress=10
-            )
-
-            # 使用数据仓库更新数据库
-            update_success = await self.game_repository.update(
-                id=game.id,
-                fields={
-                    "story_character_info": story_character_info,
-                    "progress": generate_progress
-                }
-            )
-
-            if not update_success:
-                return WorkflowResult(
-                    success=False,
-                    error="Failed to update game data"
-                )
-
-            # 更新game对象
-            game.story_character_info = story_character_info
-            game.progress = generate_progress
-
-            return WorkflowResult(
-                success=True,
-                data=game
-            )
 
         except Exception as e:
             logger.error(f"Character info extraction failed: {str(e)}")

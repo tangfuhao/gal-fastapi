@@ -54,10 +54,6 @@ class ScriptGenerationWorkflow(Workflow[DBGame]):
             ])
 
             llm_tool = LLMTool()
-            is_success = True
-
-            # 为每个章节生成脚本
-            updated_chapters = []
 
             # 过滤出需要生成脚本的章节
             chapters_to_generate = [
@@ -103,16 +99,22 @@ class ScriptGenerationWorkflow(Workflow[DBGame]):
             )
 
             # 处理结果
+            is_success = True
+            chapter_map = {chapter.index: chapter for chapter in game.chapters}  # 保存所有章节的映射
+            
             for chapter, success in results:
                 if not success:
                     is_success = False
-                updated_chapters.append(chapter)
+                chapter_map[chapter.index] = chapter  # 更新或添加生成的章节
+            
+            # 重建章节列表，保持原有顺序
+            updated_chapters = [chapter_map[i] for i in range(1, len(chapter_map) + 1)]
 
             # 更新进度
             generate_progress = GameGenerationProgress(
                 current_workflow="script_generation",
                 progress=30
-            )
+            ) if is_success else game.progress
 
             # 更新游戏对象
             game.chapters = updated_chapters
@@ -122,8 +124,8 @@ class ScriptGenerationWorkflow(Workflow[DBGame]):
             update_success = await self.game_repository.update(
                 id=game.id,
                 fields={
-                    "chapters": updated_chapters,
-                    "progress": generate_progress
+                    "chapters": game.chapters,
+                    "progress": game.progress
                 }
             )
 

@@ -34,8 +34,6 @@ class ScriptBackgroundWorkflow(Workflow[DBGame]):
                 )
 
             llm_tool = LLMTool()
-            is_success = True
-            updated_chapters = []
 
             # 过滤出需要生成背景的章节
             chapters_to_generate = [
@@ -83,24 +81,22 @@ class ScriptBackgroundWorkflow(Workflow[DBGame]):
             )
 
             # 处理结果
+            is_success = True
+            chapter_map = {chapter.index: chapter for chapter in game.chapters}  # 保存所有章节的映射
+            
             for chapter, success in results:
-                updated_chapters.append(chapter)
                 if not success:
                     is_success = False
-
-            # 添加其他章节（已生成或未开始生成的章节）
-            for chapter in game.chapters:
-                if chapter not in chapters_to_generate:
-                    updated_chapters.append(chapter)
-
-            # 按章节索引排序
-            updated_chapters.sort(key=lambda x: x.index)
+                chapter_map[chapter.index] = chapter  # 更新或添加生成的章节
+            
+            # 重建章节列表，保持原有顺序
+            updated_chapters = [chapter_map[i] for i in range(1, len(chapter_map) + 1)]
 
             # 更新进度
             generate_progress = GameGenerationProgress(
                 current_workflow="script_background",
                 progress=40
-            )
+            ) if is_success else game.progress
 
             # 更新游戏对象
             game.chapters = updated_chapters
@@ -110,8 +106,8 @@ class ScriptBackgroundWorkflow(Workflow[DBGame]):
             update_success = await self.game_repository.update(
                 id=game.id,
                 fields={
-                    "chapters": updated_chapters,
-                    "progress": generate_progress
+                    "chapters": game.chapters,
+                    "progress": game.progress
                 }
             )
 
@@ -124,7 +120,7 @@ class ScriptBackgroundWorkflow(Workflow[DBGame]):
             return WorkflowResult(
                 success=is_success,
                 data=game,
-                error="Some chapters failed in background generation" if not is_success else None
+                error="Some chapters failed to generate background" if not is_success else None
             )
 
         except Exception as e:
