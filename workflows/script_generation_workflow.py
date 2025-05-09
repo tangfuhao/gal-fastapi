@@ -108,7 +108,7 @@ class ScriptGenerationWorkflow(Workflow[DBGame]):
                 chapter_map[chapter.index] = chapter  # 更新或添加生成的章节
             
             # 重建章节列表，保持原有顺序
-            updated_chapters = [chapter_map[i] for i in range(1, len(chapter_map) + 1)]
+            updated_chapters = [chapter_map[i] for i in range(0, len(chapter_map) )]
 
             # 更新进度
             generate_progress = GameGenerationProgress(

@@ -72,10 +72,11 @@ class DeepSeekClient:
             response = await client.chat.completions.create(
                 model=model or self.model,
                 messages=messages,
-                stream=False
+                stream=False,
+                timeout=60
             )
             logger.info("Successfully received response from DeepSeek API")
             return response.choices[0].message.content
         except Exception as e:
             logger.error("Error occurred: %s", str(e))
-            raise
+            raise e

@@ -58,4 +58,4 @@ class LLMTool:
             return completion
         except Exception as e:
             logger.error(f"LLMTool 执行失败: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise e
